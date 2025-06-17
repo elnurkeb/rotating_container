@@ -13,70 +13,52 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: GyroscopeRotationWidget(),
-    );
+    return MaterialApp(home: RotatingContainer());
   }
 }
 
-class GyroscopeRotationWidget extends StatefulWidget {
-  const GyroscopeRotationWidget({super.key});
+class RotatingContainer extends StatefulWidget {
+  const RotatingContainer({super.key});
 
   @override
-  _GyroscopeRotationWidgetState createState() =>
-      _GyroscopeRotationWidgetState();
+  _RotatingContainerState createState() => _RotatingContainerState();
 }
 
-class _GyroscopeRotationWidgetState extends State<GyroscopeRotationWidget> {
-  double rotationX = 0;
-  double rotationY = 0;
-
-  double gyroX = 0;
-  double gyroY = 0;
-
-  final double alpha = 0.98;
-
-  DateTime? lastGyroTimestamp;
+class _RotatingContainerState extends State<RotatingContainer>
+    with SingleTickerProviderStateMixin {
+  double rotationX = 0, goalRotationX = 0;
+  double rotationY = 0, goalRotationY = 0;
+  late AnimationController controller;
 
   StreamSubscription<GyroscopeEvent>? gyroSub;
-  StreamSubscription<AccelerometerEvent>? accelSub;
 
   @override
   void initState() {
     super.initState();
 
+    controller = AnimationController(vsync: this);
+    controller.repeat(period: Duration(milliseconds: 16));
+
+    DateTime? lastGyroTimestamp = DateTime.now();
+
     gyroSub = gyroscopeEventStream().listen((event) {
       final now = DateTime.now();
+      // if (lastGyroTimestamp != null) {
+      final dt = now.difference(lastGyroTimestamp!).inMilliseconds / 1000.0;
+      goalRotationY += event.y * dt;
+      goalRotationY = goalRotationY.clamp(-pi / 4, pi / 4);
 
-      if (lastGyroTimestamp != null) {
-        double dt =
-            now.difference(lastGyroTimestamp!).inMilliseconds.toDouble() / 1000;
-
-        gyroX += event.x * dt;
-        gyroY -= event.y * dt;
-      }
+      goalRotationX -= event.x * dt;
+      goalRotationX = goalRotationX.clamp(-pi / 4, pi / 4);
+      // }
       lastGyroTimestamp = now;
-    });
-
-    accelSub = accelerometerEventStream().listen((event) {
-      double accAngleX = atan2(event.y, event.z);
-      double accAngleY =
-          atan2(event.x, sqrt(event.y * event.y + event.z * event.z));
-
-      rotationX = alpha * gyroX + (1 - alpha) * accAngleX;
-      rotationY = alpha * gyroY + (1 - alpha) * accAngleY;
-
-      rotationX = rotationX.clamp(-pi / 4, pi / 4);
-      rotationY = rotationY.clamp(-pi / 4, pi / 4);
-
-      setState(() {});
     });
   }
 
   @override
   void dispose() {
     gyroSub?.cancel();
-    accelSub?.cancel();
+    controller.dispose();
     super.dispose();
   }
 
@@ -84,12 +66,23 @@ class _GyroscopeRotationWidgetState extends State<GyroscopeRotationWidget> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, 0.001)
-            ..rotateX(rotationX)
-            ..rotateY(rotationY),
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (context, child) {
+            rotationX = lerp(rotationX, goalRotationX, 0.1);
+            rotationY = lerp(rotationY, goalRotationY, 0.1);
+
+            goalRotationX = lerp(goalRotationX, 0, 0.04);
+            goalRotationY = lerp(goalRotationY, 0, 0.04);
+            return Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..setEntry(3, 2, 0.001)
+                ..rotateX(rotationX)
+                ..rotateY(rotationY),
+              child: child,
+            );
+          },
           child: Container(
             width: 250,
             height: 150,
@@ -105,4 +98,8 @@ class _GyroscopeRotationWidgetState extends State<GyroscopeRotationWidget> {
       ),
     );
   }
+}
+
+double lerp(double a, double b, double t) {
+  return a + (b - a) * t;
 }
