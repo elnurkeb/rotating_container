@@ -23,11 +23,10 @@ class GyroscopeRotationWidget extends StatefulWidget {
   const GyroscopeRotationWidget({super.key});
 
   @override
-  _GyroscopeRotationWidgetState createState() =>
-      _GyroscopeRotationWidgetState();
+  GyroscopeRotationWidgetState createState() => GyroscopeRotationWidgetState();
 }
 
-class _GyroscopeRotationWidgetState extends State<GyroscopeRotationWidget> {
+class GyroscopeRotationWidgetState extends State<GyroscopeRotationWidget> {
   double rotationX = 0;
   double rotationY = 0;
 
