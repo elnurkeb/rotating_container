@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
-import 'package:pi_storybook/services/Notification.service.dart';
+import 'package:rotating_container/notification_service.dart';
 
 class LiquidNotification extends StatefulWidget {
   const LiquidNotification({super.key});
@@ -11,8 +11,7 @@ class LiquidNotification extends StatefulWidget {
 class LiquidNotificationState extends State<LiquidNotification>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-
-  late Animation<Offset> _containerHeightAnim;
+  late Animation<double> _heightAnimation;
 
   @override
   void initState() {
@@ -23,40 +22,32 @@ class LiquidNotificationState extends State<LiquidNotification>
       duration: const Duration(seconds: 4),
     );
 
-    _containerHeightAnim = Tween<Offset>(
-      begin: Offset(0, -1),
-      end: Offset(0, 0),
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 1.0, curve: Curves.easeInOut),
-      ),
-    );
+    _heightAnimation = Tween<double>(
+      begin: -130,
+      end: 100,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
     NotificationService.instance.currentNotification.addListener(() async {
-      await _controller.forward();
+      final notification =
+          NotificationService.instance.currentNotification.value;
+      if (notification != null) {
+        await _controller.forward();
+        await Future.delayed(const Duration(seconds: 3));
+        await _controller.reverse();
+        NotificationService.instance.removeNotification();
+      } else {
+        await _controller.reverse();
+      }
     });
-    NotificationService.instance.showNotification(
-      CustomNotification(
-        "notification title 1",
-        "notification body 1",
-        Icons.notifications,
-      ),
-    );
-    NotificationService.instance.showNotification(
-      CustomNotification(
-        "notification title 2",
-        "notification body 2",
-        Icons.notifications,
-      ),
-    );
-  }
 
-  // Future<void> _playAnimation() async {
-  //   await _controller.forward();
-  //   await Future.delayed(const Duration(seconds: 1));
-  //   await _controller.reverse();
-  // }
+    Future.delayed(Duration.zero, () {
+      NotificationService.instance.showNotification(CustomNotification(
+        title: 'Test Notification',
+        body: 'This is a notification body.',
+        icon: Icons.notifications,
+      ));
+    });
+  }
 
   @override
   void dispose() {
@@ -68,110 +59,79 @@ class LiquidNotificationState extends State<LiquidNotification>
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
 
-    return ValueListenableBuilder<List<CustomNotification>>(
+    return ValueListenableBuilder<CustomNotification?>(
       valueListenable: NotificationService.instance.currentNotification,
-      builder: (context, value, _) {
-        if (value.isEmpty) {
+      builder: (context, notification, _) {
+        if (notification == null) {
           return const SizedBox.shrink();
         }
-        return Stack(
-          children: [
-            LiquidGlassLayer(
-              settings: const LiquidGlassSettings(
-                blur: 8,
-                thickness: 30,
-                lightAngle: 0.5,
-                lightIntensity: 1,
-                ambientStrength: 0.3,
-                blend: 50,
-                chromaticAberration: 0.8,
-                //glassColor: Color.fromARGB(60, 255, 255, 255),
-                glassColor: Color.fromARGB(11, 20, 20, 135),
-              ),
-              child: Stack(
+
+        return LiquidGlassLayer(
+          settings: const LiquidGlassSettings(
+            blur: 8,
+            thickness: 30,
+            lightAngle: 0.5,
+            lightIntensity: 1,
+            ambientStrength: 0.3,
+            blend: 50,
+            chromaticAberration: 0.8,
+            glassColor: Color.fromARGB(11, 20, 20, 135),
+          ),
+          child: AnimatedBuilder(
+            animation: _heightAnimation,
+            builder: (context, child) {
+              return Stack(
                 children: [
                   Positioned(
-                    top: -68,
-                    left: screenWidth / 6,
+                    left: 40,
+                    right: 40,
+                    top: -100,
                     child: LiquidGlass.inLayer(
                       shape: LiquidRoundedSuperellipse(
-                        borderRadius: Radius.circular(20),
+                        borderRadius: Radius.circular(24),
                       ),
-                      child: SizedBox(width: screenWidth * 2 / 3, height: 100),
+                      child: SizedBox(
+                        height: 100,
+                        width: screenWidth / 3 * 2,
+                      ),
                     ),
                   ),
-
-                  ListView.separated(
-                    physics: const NeverScrollableScrollPhysics(),
-                    shrinkWrap: true,
-                    itemCount: value.length,
-                    separatorBuilder:
-                        (context, index) => const SizedBox(height: 35),
-                    itemBuilder: (context, index) {
-                      final notification = value[index];
-                      return AnimatedBuilder(
-                        animation: _containerHeightAnim,
-                        builder: (context, child) {
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              //top: _containerHeightAnim.value.dy,
-                              left: 40,
-                              right: 40,
-                            ),
-                            child: Dismissible(
-                              key: ValueKey(notification),
-                              direction: DismissDirection.endToStart,
-                              onDismissed: (_) {
-                                NotificationService.instance.removeNotification(
-                                  notification,
-                                );
-                              },
-
-                              // child: Positioned(
-                              //   top: _containerHeightAnim.value,
-                              //   left: 40,
-                              //   right: 40,
-                              child: LiquidGlass.inLayer(
-                                shape: LiquidRoundedSuperellipse(
-                                  borderRadius: Radius.circular(24),
-                                ),
-                                child: Container(
-                                  height: 100,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 20,
-                                    horizontal: 16,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        notification.icon,
-                                        color: Colors.yellow,
-                                      ),
-                                      SizedBox(width: 12),
-                                      Text(
-                                        '${notification.title}\n${notification.body}',
-
-                                        style: TextStyle(
-                                          decoration: TextDecoration.none,
-                                          color: Colors.black,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                  Positioned(
+                    left: 40,
+                    right: 40,
+                    top: _heightAnimation.value,
+                    child: LiquidGlass.inLayer(
+                      shape: LiquidRoundedSuperellipse(
+                        borderRadius: Radius.circular(24),
+                      ),
+                      child: Container(
+                        height: 100,
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 20, horizontal: 16),
+                        child: Row(
+                          children: [
+                            Icon(notification.icon, color: Colors.yellow),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text(
+                                '${notification.title}\n${notification.body}',
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  decoration: TextDecoration.none,
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      );
-                    },
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ],
-              ),
-            ),
-          ],
+              );
+            },
+          ),
         );
       },
     );
